@@ -1,7 +1,7 @@
 import streamlit as st
 from datetime import datetime, timedelta
 import time
-
+import pytz
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Cockpit Pregoeiro Finep", layout="wide", page_icon="⚖️")
 
@@ -86,7 +86,7 @@ with tab1:
 # ABA 2: CRONÔMETRO DE PRAZOS
 # ==============================================================================
 with tab2:
-    st.header("Calculadora de Prazos")
+    st.header("Calculadora de Prazos (Horário de Brasília)")
     st.markdown("Defina o prazo no chat e use a calculadora para saber a hora exata de encerramento.")
     
     col_time1, col_time2 = st.columns(2)
@@ -105,15 +105,26 @@ with tab2:
             minutos = st.number_input("Minutos Personalizados", min_value=1, value=30)
             
         if st.button("Calcular Horário Final"):
-            agora = datetime.now()
+            # DEFININDO O FUSO HORÁRIO DE BRASÍLIA
+            tz_brasilia = pytz.timezone('America/Sao_Paulo')
+            agora = datetime.now(tz_brasilia)
+            
             final = agora + timedelta(minutes=minutos)
-            st.session_state['hora_final'] = final.strftime("%H:%M:%S")
-            st.session_state['msg_prazo'] = f"O prazo de {minutos} minutos encerra-se às {final.strftime('%H:%M')}."
+            
+            # Formatação para mostrar apenas Hora:Minuto
+            hora_formatada = final.strftime("%H:%M")
+            
+            st.session_state['hora_final'] = hora_formatada
+            st.session_state['msg_prazo'] = f"O prazo de {minutos} minutos encerra-se às {hora_formatada} (Horário de Brasília)."
 
     with col_time2:
         st.subheader("Resultado para o Chat")
+        # Mostra o relógio atual só para você conferir se está certo
+        tz_brasilia_check = pytz.timezone('America/Sao_Paulo')
+        st.caption(f"Horário atual do sistema: {datetime.now(tz_brasilia_check).strftime('%H:%M:%S')}")
+        
         if 'hora_final' in st.session_state:
-            st.metric(label="Horário Limite", value=st.session_state['hora_final'])
+            st.metric(label="Horário Limite (BSB)", value=st.session_state['hora_final'])
             st.code(st.session_state['msg_prazo'], language="text")
             st.info("Copie o texto acima e cole no chat do sistema.")
 
