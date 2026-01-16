@@ -1,169 +1,124 @@
 import streamlit as st
-from datetime import datetime, timedelta
-import time
-import pytz
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Cockpit Pregoeiro Finep", layout="wide", page_icon="⚖️")
 
-# --- CONSTANTES DO EDITAL 90019/2025 ---
-VALOR_ESTIMADO = 3295260.58
-MIN_PATRIMONIO_LIQUIDO = VALOR_ESTIMADO * 0.10  # 10% = R$ 329.526,06
-ATIVO_MINIMO_BANCO = 14000000000.00  # R$ 14 Bilhões
+# Configuração da página
+st.set_page_config(page_title="Guia de Compras - Finep", page_icon="🛒")
 
-st.title("⚖️ Cockpit do Pregoeiro - PE 90019/2025 (Finep)")
-st.markdown(f"**Objeto:** Consultoria IFRS 9 / CMN 4.966 | **Valor Máx:** R$ {VALOR_ESTIMADO:,.2f}")
+# CSS para dar uma melhorada no visual (opcional)
+st.markdown("""
+    <style>
+    .stButton>button {
+        width: 100%;
+        background-color: #004b8d;
+        color: white;
+    }
+    .step-card {
+        padding: 20px;
+        background-color: #f0f2f6;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# Abas para separar as funcionalidades
-tab1, tab2, tab3 = st.tabs(["✅ Checklist Habilitação", "⏱️ Cronômetro de Prazos", "💬 Gerador de Textos"])
+# Título e Cabeçalho
+st.title("🛒 Guia de Compras - Áreas Demandantes")
+st.markdown("Descubra o fluxo correto para sua contratação baseado no **RLCC v5**.")
 
-# ==============================================================================
-# ABA 1: CHECKLIST DE HABILITAÇÃO (O "PENTE FINO")
-# ==============================================================================
-with tab1:
-    st.header("Validação de Habilitação")
+# Inicializar estado da sessão para navegação
+if 'step' not in st.session_state:
+    st.session_state.step = 1
+if 'valor_compra' not in st.session_state:
+    st.session_state.valor_compra = 0.0
+
+# --- LÓGICA DE NAVEGAÇÃO ---
+
+# Definição dos Limites (Conforme RLCC Art. 10 e atualizações anuais)
+LIMITE_PEQUENAS_COMPRAS = 7500.00  # 10% do limite de dispensa (Art. 10 item 6)
+LIMITE_DISPENSA = 75000.00         # Limite Art. 29 II Lei 13.303 (atualizado)
+
+# PÁGINA 1: INPUT DO VALOR
+if st.session_state.step == 1:
+    st.markdown("### Passo 1: Qual o valor estimado da contratação?")
     
-    col_fin, col_tec = st.columns(2)
+    val = st.number_input(
+        "Insira o valor total (R$)", 
+        min_value=0.0, 
+        step=100.0, 
+        format="%.2f"
+    )
     
-    with col_fin:
-        st.subheader("1. Qualificação Econômico-Financeira")
-        st.info("Insira os índices do SICAF ou Balanço (LG, LC, SG).")
-        
-        lg = st.number_input("Liquidez Geral (LG)", value=0.00, step=0.01, format="%.2f")
-        lc = st.number_input("Liquidez Corrente (LC)", value=0.00, step=0.01, format="%.2f")
-        sg = st.number_input("Solvência Geral (SG)", value=0.00, step=0.01, format="%.2f")
-        
-        # Lógica do Edital: Se índice <= 1, exige PL >= 10%
-        indices_ok = (lg > 1) and (lc > 1) and (sg > 1)
-        aprovado_financeiro = False
-        
-        if indices_ok:
-            st.success("✅ Índices superiores a 1.0. HABILITADO financeiramente.")
-            aprovado_financeiro = True
-        else:
-            st.warning("⚠️ Um ou mais índices são ≤ 1.0. Verificando Patrimônio Líquido...")
-            pl_empresa = st.number_input(f"Patrimônio Líquido (R$)", value=0.00, step=1000.00)
-            
-            if pl_empresa >= MIN_PATRIMONIO_LIQUIDO:
-                st.success(f"✅ PL (R$ {pl_empresa:,.2f}) supera o mínimo de R$ {MIN_PATRIMONIO_LIQUIDO:,.2f}. HABILITADO.")
-                aprovado_financeiro = True
-            else:
-                st.error(f"❌ PL insuficiente. Mínimo exigido: R$ {MIN_PATRIMONIO_LIQUIDO:,.2f}. INABILITADO.")
+    st.info("ℹ️ Considere o valor global da contratação (ex: 12 meses de serviço ou total de bens).")
 
-    with col_tec:
-        st.subheader("2. Qualificação Técnica (Atestados)")
-        
-        check_ativo = st.checkbox(f"Atestado emitido por Banco com Ativo Total ≥ R$ 14 Bilhões?")
-        if check_ativo:
-            st.caption("✔️ Confirmação de porte da instituição financeira atendida.")
+    if st.button("Verificar Procedimento ➡️"):
+        if val > 0:
+            st.session_state.valor_compra = val
+            st.session_state.step = 2
+            st.rerun()
         else:
-            st.caption("❌ Atenção: Verificar valor do Ativo Total no atestado.")
-            
-        check_escopo = st.checkbox("Escopo cita IFRS 9 / Resolução CMN 4.966?")
-        check_risco = st.checkbox("Escopo cita revisão de Risco de Crédito/Precificação?")
-        
-        st.subheader("3. Equipe Técnica (Vínculo + Exp)")
-        perfil1 = st.checkbox("Especialista IFRS 9 (10 anos + 3 projetos pós-2014)")
-        perfil2 = st.checkbox("Consultor Contábil (5 anos IFRS bancário)")
-        perfil3 = st.checkbox("Consultor Tributário (5 anos + CRC)")
-        perfil4 = st.checkbox("Consultor de Riscos (5 anos)")
-        perfil5 = st.checkbox("Especialista Modelagem (5 anos)")
-        
-        aprovado_tecnico = check_ativo and check_escopo and check_risco and perfil1 and perfil2 and perfil3 and perfil4 and perfil5
-        
-        if aprovado_tecnico:
-            st.success("✅ Qualificação Técnica APROVADA")
-        else:
-            st.error("❌ Pendências na Qualificação Técnica")
+            st.warning("Por favor, insira um valor maior que zero.")
 
+# PÁGINA 2: RESULTADO E CHECKLIST
+elif st.session_state.step == 2:
+    valor = st.session_state.valor_compra
+    
+    # Botão para voltar
+    if st.button("⬅️ Voltar e simular outro valor"):
+        st.session_state.step = 1
+        st.rerun()
+    
     st.divider()
-    if aprovado_financeiro and aprovado_tecnico:
-        st.balloons()
-        st.success("🏆 LICITANTE HABILITADO COM SUCESSO! PODE ADJUDICAR.")
+    
+    # --- CENÁRIO 1: DISPENSA DE DOCUMENTOS COMPLEXOS (< R$ 7.500) ---
+    if valor <= LIMITE_PEQUENAS_COMPRAS:
+        st.success(f"✅ **Faixa de Valor: Pequenas Compras (Até R$ {LIMITE_PEQUENAS_COMPRAS:,.2f})**")
+        st.markdown("### 🚀 Rito Simplificado (Art. 10, Item 6 do RLCC)")
+        st.write("Nesta faixa, o processo é desburocratizado para agilidade.")
+        
+        with st.expander("📄 Documentos Necessários (Checklist)", expanded=True):
+            st.markdown("""
+            * [ ] **Justificativa da Contratação**: Texto simples explicando a necessidade.
+            * [ ] **Ficha Técnica**: Descrição do material/serviço (Substitui TR e ETP).
+            * [ ] **Cotação Simplificada**: Preço de mercado (pode ser email, site, etc).
+            * [ ] **Requisição de Compras**: No sistema interno.
+            """)
+            st.warning("⚠️ **Atenção:** Não é necessário elaborar Estudo Preliminar (EP) nem Termo de Referência (TR).")
+
+    # --- CENÁRIO 2: DISPENSA DE LICITAÇÃO (Entre R$ 7.500 e R$ 75.000) ---
+    elif valor <= LIMITE_DISPENSA:
+        st.info(f"⚖️ **Faixa de Valor: Dispensa de Licitação (Até R$ {LIMITE_DISPENSA:,.2f})**")
+        st.markdown("### 📋 Contratação Direta (Art. 10, Item 2 do RLCC)")
+        st.write("Você não precisa fazer uma licitação pública, mas precisa formalizar o planejamento.")
+        
+        with st.expander("📄 Documentos Necessários (Checklist)", expanded=True):
+            st.markdown("""
+            * [ ] **Estudo Preliminar (EP)**: Análise da necessidade e viabilidade (Art. 18).
+            * [ ] **Termo de Referência (TR)**: Detalhamento técnico e obrigações (Art. 18).
+            * [ ] **Mapa de Preços**: Mínimo de 3 cotações válidas ou justificativa (Art. 10.2.d).
+            * [ ] **Requisição de Compras**: Aprovada pelo gestor.
+            * [ ] **Parecer Jurídico**: Pode ser dispensado se usar minuta padrão (Art. 10.2.k).
+            """)
+            
+        st.markdown("#### Próximos Passos:")
+        st.markdown("1. Elaborar documentos no SEI.\n2. Solicitar cotações aos fornecedores.\n3. Encaminhar ao DCAD com antecedência mínima de 10 dias úteis.")
+
+    # --- CENÁRIO 3: LICITAÇÃO (> R$ 75.000) ---
     else:
-        st.warning("⚠️ Licitante com pendências. Não adjudicar ainda.")
-
-# ==============================================================================
-# ABA 2: CRONÔMETRO DE PRAZOS
-# ==============================================================================
-with tab2:
-    st.header("Calculadora de Prazos (Horário de Brasília)")
-    st.markdown("Defina o prazo no chat e use a calculadora para saber a hora exata de encerramento.")
-    
-    col_time1, col_time2 = st.columns(2)
-    
-    with col_time1:
-        st.subheader("Definir Prazo")
-        prazo_tipo = st.radio("Selecione o tipo de prazo:", 
-                              ["Envio de Proposta (2h)", "Envio de Documentos (2h)", "Intenção de Recurso (Min. 10 min)", "Personalizado"])
+        st.warning(f"🏛️ **Faixa de Valor: Licitação (Acima de R$ {LIMITE_DISPENSA:,.2f})**")
+        st.markdown("### 📢 Processo Licitatório (Lei 13.303/16)")
+        st.write("O valor exige ampla concorrência (geralmente Pregão). O planejamento deve ser rigoroso.")
         
-        minutos = 0
-        if prazo_tipo == "Envio de Proposta (2h)" or prazo_tipo == "Envio de Documentos (2h)":
-            minutos = 120
-        elif prazo_tipo == "Intenção de Recurso (Min. 10 min)":
-            minutos = st.slider("Minutos para Recurso", min_value=10, max_value=60, value=20)
-        else:
-            minutos = st.number_input("Minutos Personalizados", min_value=1, value=30)
+        with st.expander("📄 Documentos Necessários (Checklist)", expanded=True):
+            st.markdown("""
+            * [ ] **Estudo Técnico Preliminar (ETP)**: Completo, com análise de mercado.
+            * [ ] **Matriz de Risco**: Obrigatória para serviços complexos/TI (Art. 41).
+            * [ ] **Termo de Referência (TR)**: Critérios de julgamento e habilitação claros.
+            * [ ] **Orçamento Estimado**: Pesquisa de preços rigorosa (Art. 35).
+            * [ ] **Aprovação da Autoridade Competente**: Conforme alçada (Art. 3).
+            """)
             
-        if st.button("Calcular Horário Final"):
-            # DEFININDO O FUSO HORÁRIO DE BRASÍLIA
-            tz_brasilia = pytz.timezone('America/Sao_Paulo')
-            agora = datetime.now(tz_brasilia)
-            
-            final = agora + timedelta(minutes=minutos)
-            
-            # Formatação para mostrar apenas Hora:Minuto
-            hora_formatada = final.strftime("%H:%M")
-            
-            st.session_state['hora_final'] = hora_formatada
-            st.session_state['msg_prazo'] = f"O prazo de {minutos} minutos encerra-se às {hora_formatada} (Horário de Brasília)."
+        st.markdown("#### Próximos Passos:")
+        st.markdown(f"1. Planejamento deve iniciar com **120 a 180 dias** de antecedência (Art. 18.1.e).\n2. Validação técnica conjunta se for TI (Art. 20).\n3. Envio ao DCAD para elaboração do Edital.")
 
-    with col_time2:
-        st.subheader("Resultado para o Chat")
-        # Mostra o relógio atual só para você conferir se está certo
-        tz_brasilia_check = pytz.timezone('America/Sao_Paulo')
-        st.caption(f"Horário atual do sistema: {datetime.now(tz_brasilia_check).strftime('%H:%M:%S')}")
-        
-        if 'hora_final' in st.session_state:
-            st.metric(label="Horário Limite (BSB)", value=st.session_state['hora_final'])
-            st.code(st.session_state['msg_prazo'], language="text")
-            st.info("Copie o texto acima e cole no chat do sistema.")
-
-# ==============================================================================
-# ABA 3: GERADOR DE TEXTOS (CHATBOT)
-# ==============================================================================
-with tab3:
-    st.header("Gerador de Mensagens Padrão")
-    
-    situacao = st.selectbox("Selecione a situação atual:", 
-                            ["Suspensão para Análise", 
-                             "Solicitação de Planilha Ajustada",
-                             "Solicitação de Habilitação",
-                             "Abertura de Prazo Recursal",
-                             "Recusa de Intenção de Recurso",
-                             "Desclassificação (Preço Inexequível)"])
-    
-    texto_gerado = ""
-    
-    if situacao == "Suspensão para Análise":
-        data_retorno = st.text_input("Data prevista de retorno (opcional)", "a ser informada via sistema")
-        texto_gerado = f"Srs. Licitantes, a sessão será suspensa neste momento para análise detalhada da documentação técnica e contábil, com base no item 14.2 do Edital. A data de retomada será {data_retorno}. Acompanhem as mensagens pelo sistema."
-        
-    elif situacao == "Solicitação de Planilha Ajustada":
-        texto_gerado = "Srs. Licitantes, convoco a empresa classificada provisoriamente em 1º lugar para o envio da Planilha de Preços readequada ao lance vencedor (Anexo II), no prazo de 2 (duas) horas, conforme Item 10.1 do Edital. Atentem-se para não ultrapassar duas casas decimais."
-        
-    elif situacao == "Solicitação de Habilitação":
-        texto_gerado = "Srs. Licitantes, solicito o envio dos documentos de Habilitação (Jurídica, Fiscal, Econômica e Técnica) via sistema, no prazo de 2 (duas) horas, conforme Item 13.5 do Edital. Lembro que os atestados devem cumprir o requisito de Ativo Total (R$ 14 Bi) do item 13.7.4."
-        
-    elif situacao == "Abertura de Prazo Recursal":
-        tempo = st.text_input("Tempo concedido (min)", "20")
-        texto_gerado = f"Srs. Licitantes, declaro o vencedor do certame. Abro neste momento o prazo de {tempo} minutos para manifestação motivada de intenção de recurso, conforme Item 15.1 do Edital. A não manifestação imediata e motivada neste prazo implicará na decadência do direito de recurso."
-        
-    elif situacao == "Recusa de Intenção de Recurso":
-        motivo = st.text_input("Motivo da recusa", "alegação genérica sobre preços, sem apontar vício específico")
-        texto_gerado = f"Pregoeiro indefere a intenção de recurso registrada pela licitante, pois a manifestação não apresentou motivação concreta ou fática, tratando-se apenas de {motivo}. Conforme jurisprudência do TCU e item 15.1.1 do Edital, a falta de motivação imediata acarreta a perda do direito."
-
-    elif situacao == "Desclassificação (Preço Inexequível)":
-        texto_gerado = "A proposta foi desclassificada por apresentar preço manifestamente inexequível, inferior a 30% da média dos lances ofertados, conforme critério objetivo estabelecido no item 10.2.4.4 do Edital, não tendo a licitante demonstrado sua viabilidade."
-
-    st.subheader("Texto para Copiar:")
-    st.code(texto_gerado, language="text")
+# Rodapé
+st.markdown("---")
+st.caption("Baseado no Regulamento de Licitações e Contratos (RLCC) da Finep - Versão 05/2025.")
